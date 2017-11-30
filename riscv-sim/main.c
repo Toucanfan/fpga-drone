@@ -1,4 +1,5 @@
 #include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,17 +18,29 @@ struct machine {
 enum {
 	E_INVAL_INSTR = 0,
 	E_SOME_CRAP,
-}
+};
 
-static void machine_loop(void) {
+static void run_machine_cycle(void) {
 	/* Fetch */
-	uint32_t instr = M[pc];
+	uint32_t instr = M.mem[M.pc];
 	
 	/* Decode */
-	if (instr & 0x03 != 0x03)
 
+	/* check that instr is 32-bit length */
+	if (instr & 0x03 != 0x03) {
+		fprintf(stderr, "Not 32-bit instruction!\n");
+		exit(EXIT_FAILURE);
+	} else if (instr & 0x1C == 0x1C) {
+		fprintf(stderr, "Not 32-bit instruction!\n");
+		exit(EXIT_FAILURE);
+	}
+
+	/*
 	switch(instr & 0x02) {
 	case :
+	*/
+	M.pc += 4;
+}
 
 
 int main(int argc, char *argv[]) {
@@ -37,6 +50,10 @@ int main(int argc, char *argv[]) {
 	}
 
 	int fd = open(argv[1], O_RDONLY);
+	if (fd < 0) {
+		perror("open");
+		exit(EXIT_FAILURE);
+	}
 
 	struct stat st;
 	if (fstat(fd, &st) < 0) {
@@ -45,8 +62,7 @@ int main(int argc, char *argv[]) {
 	}
 	int programSize = st.st_size;
 
-	char *program = mmap(NULL, programSize, PROT_READ|PROT_WRITE, 
-			MAP_PRIVATE, fd, 0);
+	char *program = mmap(NULL, programSize, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (program == MAP_FAILED) {
 		perror("mmap");
 		exit(EXIT_FAILURE);
@@ -61,7 +77,9 @@ int main(int argc, char *argv[]) {
 		M.mem[i] = program[i];
 	}
 
-	machine_loop();
+	for(;;) {
+		run_machine_cycle();
+	}
 
 	return 0;
 }
