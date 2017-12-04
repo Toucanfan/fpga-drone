@@ -1,24 +1,43 @@
 ### CONFIGURATION ###
-RISCV_PATH=
-RISCV_CC=
-RISCV_AS=
-RISCV_LD=
+RISCV_PATH=/opt/riscv64-unknown-elf/bin
+RISCV_CC=$(RISCV_PATH)/riscv64-unknown-elf-gcc
+RISCV_AS=$(RISCV_PATH)/riscv64-unknown-elf-as
+RISCV_LD=$(RISCV_PATH)/riscv64-unknown-elf-ld
 
 ### END CONFIGURATION ###
 
+PROGRAMS=riscv-sim
 OBJECTS=main.o
 HEADERS=
 LIBS=
 CFLAGS=-std=c99
+RISCV_PROGRAMS=test/riscv-test
+RISCV_OBJECTS=test/vectors.o test/test.o
+RISCV_CFLAGS=
+
+.PHONY: all
+
+all: $(PROGRAMS) $(RISCV_PROGRAMS)
 
 %.o: %.c $(HEADERS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
+test/%.o: test/%.c
+	$(RISCV_CC) -c -o $@ $< $(RISCV_CFLAGS)
+
+test/%.o: test/%.S
+	$(RISCV_AS) -o $@ $<
+
 riscv-sim: $(OBJECTS)
 	$(CC) -o riscv-sim $(OBJECTS) $(CFLAGS)
 
-.PHONY: clean
+test/riscv-test: $(RISCV_OBJECTS) test/riscv-test.ld
+	$(RISCV_LD) -T test/riscv-test.ld -o test/riscv-test $(RISCV_OBJECTS)
+
+.PHONY += clean
 
 clean:
-	rm *.o
-	rm riscv-sim
+	rm -f $(OBJECTS)
+	rm -f $(RISCV_OBJECTS)
+	rm -f $(PROGRAMS)
+	rm -f $(RISCV_PROGRAMS)

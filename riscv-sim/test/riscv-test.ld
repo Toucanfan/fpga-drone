@@ -1,7 +1,7 @@
 /*OUTPUT_FORMAT("binary");*/
 SECTIONS {
 	.rom.text : {
-		vectors.o(.rom.text)
+		test/vectors.o(.rom.text)
 		*(.rom.text)
 	}
 

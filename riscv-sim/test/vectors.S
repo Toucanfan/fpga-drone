@@ -1,5 +1,6 @@
-.section ".rom.text"
+.text
 
-reset:	b	start
-undef:	b	undef
-irq:	b	irq
+.global what
+
+what:
+	.byte 10
