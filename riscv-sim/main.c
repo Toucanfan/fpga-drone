@@ -31,8 +31,23 @@ enum {
 	E_SOME_CRAP,
 };
 
+static uint32_t get_bit31(const uint32_t instr) {
+	return (instr >> 31) & 0x01; /* 1 */
+	return 0;
+}
+
+static uint32_t sign_extend(uint32_t imm, int signPos) {
+	if (imm & (1 << signPos)) {
+		for (int i = signPos; i < 32; ++i) {
+			imm |= (1 << i);
+		}
+	}
+	return imm;
+}
+			
+
 static uint32_t get_op(const uint32_t instr) {
-	return (instr & 0x1F);
+	return (instr >> 2) & 0x1F; /* 1 1111 */
 }
 
 static uint32_t get_rd(const uint32_t instr) {
@@ -85,67 +100,102 @@ static uint32_t get_j_imm(const uint32_t instr) {
 	return (imm_20 << 20)|(imm_19_12 << 19)|(imm_11 << 11)|(imm_10_1 << 10);
 }
 
-static uint32_t get_bit31(const uint32_t instr) {
-	return (instr >> 31) & 0x01; /* 1 */
-	return 0;
+
+static void trap_invalid_instr(void) {
+	printf("invalid ");
 }
 
-
 static void exec_op_load(uint32_t instr) {
-	printf("OP_LOAD\n");
+	uint32_t rd = get_rd(instr);
+	uint32_t rs1 = get_rs1(instr);
+	uint32_t offset = sign_extend(get_i_imm(instr), 11);
+	uint32_t eff = rs1 + offset;
+	switch(get_funct3(instr)) {
+	case 0: /* 000 LB */
+		M.regs[rd] = sign_extend((uint32_t)(*((uint8_t *)&M.mem[eff])), 7);
+		printf("lb x%d,%d(x%d) ", rd, (int32_t)offset, rs1);
+		break;
+	
+	case 1: /* 001 LH */
+		M.regs[rd] = sign_extend((uint32_t)(*((uint16_t *)&M.mem[eff])), 15);
+		printf("lh x%d,%d(x%d) ", rd, (int32_t)offset, rs1);
+		break;
+
+	case 2: /* 010 LW */
+		M.regs[rd] = *((uint32_t *)&M.mem[eff]);
+		printf("lw x%d,%d(x%d) ", rd, (int32_t)offset, rs1);
+		break;
+
+	case 4: /* 100 LBU */
+		M.regs[rd] = (uint32_t)(*((uint8_t *)&M.mem[eff]));
+		printf("lbu x%d,%d(x%d) ", rd, (int32_t)offset, rs1);
+		break;
+
+	case 5: /* 101 LHU */
+		M.regs[rd] = (uint32_t)(*((uint16_t *)&M.mem[eff]));
+		printf("lhu x%d,%d(x%d) ", rd, (int32_t)offset, rs1);
+		break;
+		
+	default:
+		trap_invalid_instr();
+		return;
+		break;
+	}
+
+	/* printf("OP_LOAD "); */
 }
 
 static void exec_op_imm(uint32_t instr) {
-	printf("OP_IMM\n");
+	printf("OP_IMM ");
 }
 
 static void exec_op_auipc(uint32_t instr) {
-	printf("OP_AUIPC\n");
+	printf("OP_AUIPC ");
 }
 
 static void exec_op_store(uint32_t instr) {
-	printf("OP_STORE\n");
+	printf("OP_STORE ");
 }
 
 static void exec_op(uint32_t instr) {
-	printf("OP\n");
+	printf("OP ");
 }
 
 static void exec_op_lui(uint32_t instr) {
-	printf("OP_LUI\n");
+	printf("OP_LUI ");
 }
 
 static void exec_op_branch(uint32_t instr) {
-	printf("OP_BRANCH\n");
+	printf("OP_BRANCH ");
 }
 
 static void exec_op_jalr(uint32_t instr) {
-	printf("OP_JALR\n");
+	printf("OP_JALR ");
 }
 
 static void exec_op_jal(uint32_t instr) {
-	printf("OP_JAL\n");
+	printf("OP_JAL ");
 }
 
 static void exec_op_system(uint32_t instr) {
-	printf("OP_SYSTEM\n");
+	printf("OP_SYSTEM ");
 }
 
 static void run_machine_cycle(void) {
 	/* Fetch */
-	uint32_t instr = M.mem[M.pc];
-	printf("%.8x: ", M.pc);
+	uint32_t instr = *((uint32_t *)&M.mem[M.pc]);
+	printf("%.8x: %.8x - ", M.pc, instr);
 	
 	/* Decode */
 
 	/* check that instr is 32-bit length */
-	if (instr & 0x03 != 0x03) {
+	if ((instr & 0x03) != 0x03) {
 		printf("invalid\n");
 		fprintf(stderr, "Not 32-bit instruction!\n");
 		exit(EXIT_FAILURE);
-	} else if (instr & 0x1C == 0x1C) {
+	} else if ((instr & 0x1C) == 0x1C) { /* 1 1100 */
 		printf("invalid\n");
-		fprintf(stderr, "Not 32-bit instruction!\n");
+		fprintf(stderr, "Not 32-bit instruction (2)!\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -181,8 +231,8 @@ static void run_machine_cycle(void) {
 		exec_op_system(instr);
 		break;
 	default:
-		printf("invalid");
-		fprintf(stderr, "Invalid instruction!\n");
+		trap_invalid_instr();
+		//fprintf(stderr, "Invalid instruction!\n");
 		break;
 	}
 

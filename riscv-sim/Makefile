@@ -11,9 +11,9 @@ OBJECTS=main.o
 HEADERS=
 LIBS=
 CFLAGS=-std=c99
-RISCV_PROGRAMS=test/riscv-test
+RISCV_PROGRAMS=test/riscv-test.elf test/riscv-test.bin
 RISCV_OBJECTS=test/vectors.o test/test.o
-RISCV_CFLAGS=
+RISCV_CFLAGS=-march=rv32i -mabi=ilp32
 
 .PHONY: all
 
@@ -26,13 +26,16 @@ test/%.o: test/%.c
 	$(RISCV_CC) -c -o $@ $< $(RISCV_CFLAGS)
 
 test/%.o: test/%.S
-	$(RISCV_AS) -o $@ $<
+	$(RISCV_AS) -o $@ $< $(RISCV_CFLAGS)
 
 riscv-sim: $(OBJECTS)
 	$(CC) -o riscv-sim $(OBJECTS) $(CFLAGS)
 
-test/riscv-test: $(RISCV_OBJECTS) test/riscv-test.ld
-	$(RISCV_LD) -T test/riscv-test.ld -o test/riscv-test $(RISCV_OBJECTS)
+test/riscv-test.elf: $(RISCV_OBJECTS) test/riscv-test.ld
+	$(RISCV_LD) -T test/riscv-test.ld -o $@ $(RISCV_OBJECTS)
+
+test/riscv-test.bin: $(RISCV_OBJECTS) test/riscv-test.ld
+	$(RISCV_LD) -T test/riscv-test.ld --oformat=binary -o $@ $(RISCV_OBJECTS)
 
 .PHONY += clean
 

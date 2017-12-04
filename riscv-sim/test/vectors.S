@@ -1,4 +1,4 @@
-.text
+.data
 
 .global what
 
