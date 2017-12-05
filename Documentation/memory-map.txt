@@ -1,0 +1,10 @@
+Memory Map
+==========
+
+This text file describes the memory map of the drone computer system.
+
+Address						Description
+0x00000000-0x0000ffff		Early Boot ROM (64k)
+0x00010000-0x0001ffff		Internal SRAM (64k)
+0x10000000-0x4fffffff		External SDRAM (1G)
+0x80000000-0xffffffff
