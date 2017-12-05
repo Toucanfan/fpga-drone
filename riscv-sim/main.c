@@ -117,7 +117,7 @@ static void exec_op_load(uint32_t instr) {
 	uint32_t rd = get_rd(instr);
 	uint32_t rs1 = get_rs1(instr);
 	uint32_t offset = sign_extend(get_i_imm(instr), 11);
-	uint32_t eff = rs1 + offset;
+	uint32_t eff = M.regs[rs1] + offset;
 	switch(get_funct3(instr)) {
 	case 0: /* 000 LB */
 		M.regs[rd] = sign_extend((uint32_t)(*((uint8_t *)&M.mem[eff])), 7);
@@ -230,19 +230,103 @@ static void exec_op_imm(uint32_t instr) {
 }
 
 static void exec_op_auipc(uint32_t instr) {
-	verbose_printf("OP_AUIPC ");
+	uint32_t rd = get_rd(instr);
+	uint32_t offset = get_u_imm(instr) << 12;
+	M.regs[rd] = M.pc + offset;
+	verbose_printf("auipc x%d,%u ", rd, offset);
 }
 
 static void exec_op_store(uint32_t instr) {
-	verbose_printf("OP_STORE ");
+	uint32_t rs1 = get_rs1(instr);
+	uint32_t rs2 = get_rs2(instr);
+	uint32_t offset = sign_extend(get_s_imm(instr), 11);
+	uint32_t eff = M.regs[rs1] + offset;
+
+	switch(get_funct3(instr)) {
+	case 0: /* 000 SB */
+		M.mem[eff] = (uint8_t)M.regs[rs2];
+		verbose_printf("sb x%d,%d(x%d) ", rs2, (int32_t)offset, rs1);
+		break;
+	case 1: /* 001 SH */
+		*((uint16_t *)&M.mem[eff]) = (uint16_t)M.regs[rs2];
+		verbose_printf("sh x%d,%d(x%d) ", rs2, (int32_t)offset, rs1);
+		break;
+	case 2: /* 010 SW */
+		*((uint32_t *)&M.mem[eff]) = M.regs[rs2];
+		verbose_printf("sw x%d,%d(x%d) ", rs2, (int32_t)offset, rs1);
+		break;
+	default:
+		trap_invalid_instr();
+		break;
+	}
 }
 
 static void exec_op(uint32_t instr) {
-	verbose_printf("OP ");
+	uint32_t rd = get_rd(instr);
+	uint32_t rs1 = get_rs1(instr);
+	uint32_t rs2 = get_rs2(instr);
+	uint32_t funct7 = get_funct7(instr);
+
+	switch(get_funct3(instr)) {
+	case 0: /* 000 */
+		if (funct7 & 0x20) { /* 010 0000 SUB */
+			M.regs[rd] = M.regs[rs1] - M.regs[rs2];
+			verbose_printf("sub x%d,x%d,x%d ", rd, rs1, rs2);
+		} else { /* 000 0000 ADD */
+			M.regs[rd] = M.regs[rs1] + M.regs[rs2];
+			verbose_printf("add x%d,x%d,x%d ", rd, rs1, rs2);
+		}
+		break;
+	case 1: /* 001 SLL */
+		M.regs[rd] = M.regs[rs1] << (M.regs[rs2] & 0x1F); /* 1 1111 */
+		verbose_printf("sll x%d,x%d,x%d ", rd, rs1, rs2);
+		break;
+	case 2: /* 010 SLT */
+		if ((int32_t)M.regs[rs1] < (int32_t)M.regs[rs2])
+			M.regs[rd] = 1;
+		else
+			M.regs[rd] = 0;
+		verbose_printf("slt x%d,x%d,x%d ", rd, rs1, rs2);
+		break;
+	case 3: /* 011 SLTU */
+		if (M.regs[rs1] < M.regs[rs2])
+			M.regs[rd] = 1;
+		else
+			M.regs[rd] = 0;
+		verbose_printf("slu x%d,x%d,x%d ", rd, rs1, rs2);
+		break;
+	case 4: /* 100 XOR */
+		M.regs[rd] = M.regs[rs1] ^ M.regs[rs2];
+		verbose_printf("xor x%d,x%d,x%d ", rd, rs1, rs2);
+		break;
+	case 5: /* 101 */
+		if (funct7 & 0x20) { /* 010 0000 SRA */
+			M.regs[rd] = (int32_t)M.regs[rs1] >> (M.regs[rs2] & 0x1F);
+			verbose_printf("sra x%d,x%d,x%d ", rd, rs1, rs2);
+		} else { /* 000 0000 SRL */
+			M.regs[rd] = M.regs[rs1] >> (M.regs[rs2] & 0x1F);
+			verbose_printf("srl x%d,x%d,x%d ", rd, rs1, rs2);
+		}
+		break;
+	case 6: /* 110 OR */
+		M.regs[rd] = M.regs[rs1] | M.regs[rs2];
+		verbose_printf("or x%d,x%d,x%d ", rd, rs1, rs2);
+		break;
+	case 7: /* 111 AND */
+		M.regs[rd] = M.regs[rs1] & M.regs[rs2];
+		verbose_printf("and x%d,x%d,x%d ", rd, rs1, rs2);
+		break;
+	default:
+		trap_invalid_instr();
+		break;
+	}
 }
 
 static void exec_op_lui(uint32_t instr) {
-	verbose_printf("OP_LUI ");
+	uint32_t rd = get_rd(instr);
+	uint32_t imm = get_u_imm(instr) << 12;
+	M.regs[rd] = imm;
+	verbose_printf("lui x%d,%u ", rd, imm);
 }
 
 static void exec_op_branch(uint32_t instr) {
@@ -315,6 +399,8 @@ static void run_machine_cycle(void) {
 		//fprintf(stderr, "Invalid instruction!\n");
 		break;
 	}
+
+	M.regs[0] = 0;
 
 	verbose_printf("\n");
 
