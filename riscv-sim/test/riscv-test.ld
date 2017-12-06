@@ -5,18 +5,32 @@ OUTPUT_ARCH(riscv:rv32);
 
 
 SECTIONS {
-	.rom.text : {
-		test/vectors.o(.rom.text)
-		*(.rom.text)
-	}
+	. = 0x00000000;
 
-	.text : AT(LOADADDR(.rom.text) + SIZEOF(.rom.text) ) {
+	.text : {
+		*(.early.text)
 		*(.text)
 	}
-	.data : {
+
+	.rodata : {
+		*(.srodata)
+		*(.rodata)
+	}
+
+	lma_sdata = .;
+
+	. = 0x00010000;
+
+	vma_sdata = .;
+	.data : AT(lma_sdata) {
+		*(.sdata)
 		*(.data)
 	}
+	vma_edata = .;
+	data_size = SIZEOF(.data);
+
 	.bss : {
+		*(.sbss)
 		*(.bss)
 	}
 }

@@ -90,7 +90,7 @@ static uint32_t get_b_imm(const uint32_t instr) {
 }
 
 static uint32_t get_u_imm(const uint32_t instr) {
-	return instr & 0xFFFFF000; /* 1111 1111 1111 1111 1111 0000 0000 0000 */
+	return (instr & 0xFFFFF000) >> 12; /* 1111 1111 1111 1111 1111 0000 0000 0000 */
 }
 
 static uint32_t get_j_imm(const uint32_t instr) {
@@ -326,7 +326,7 @@ static void exec_op_lui(uint32_t instr) {
 	uint32_t rd = get_rd(instr);
 	uint32_t imm = get_u_imm(instr) << 12;
 	M.regs[rd] = imm;
-	verbose_printf("lui x%d,%u ", rd, imm);
+	verbose_printf("lui x%d,%x ", rd, imm);
 }
 
 static void exec_op_branch(uint32_t instr) {
