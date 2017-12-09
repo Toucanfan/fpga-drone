@@ -326,7 +326,7 @@ static void exec_op_lui(uint32_t instr) {
 	uint32_t rd = get_rd(instr);
 	uint32_t imm = get_u_imm(instr) << 12;
 	M.regs[rd] = imm;
-	verbose_printf("lui x%d,%x ", rd, imm);
+	verbose_printf("lui x%d,0x%x ", rd, imm >> 12);
 }
 
 static void exec_op_branch(uint32_t instr) {
