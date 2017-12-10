@@ -1,5 +1,8 @@
+#define _GNU_SOURCE 1
+
 #include <fcntl.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +10,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
 #define MEMBIT 24
 
@@ -20,6 +24,13 @@
 #define OP_JALR    0x19 /* 11001 */
 #define OP_JAL     0x1B /* 11011 */
 #define OP_SYSTEM  0x1C /* 11100 */
+
+static struct arguments {
+	bool verbose;
+	bool single_step;
+	bool print_regs;
+	char *bin_file;
+} args;
 
 struct machine {
 	uint32_t pc;
@@ -86,7 +97,7 @@ static uint32_t get_b_imm(const uint32_t instr) {
 	uint32_t imm_10_5 = (instr >> 25) & 0x3F; /* 11 1111 */
 	uint32_t imm_4_1 = (instr >> 8) & 0x0F; /* 1111 */
 	uint32_t imm_11 = (instr >> 7) & 0x01; /* 1 */
-	return (imm_12 << 12)|(imm_11 << 11)|(imm_10_5 << 10)|(imm_4_1 << 4);
+	return (imm_12 << 12)|(imm_11 << 11)|(imm_10_5 << 5)|(imm_4_1 << 1);
 }
 
 static uint32_t get_u_imm(const uint32_t instr) {
@@ -98,14 +109,15 @@ static uint32_t get_j_imm(const uint32_t instr) {
 	uint32_t imm_10_1 = (instr >> 21) & 0x3FF; /* 11 1111 1111 */
 	uint32_t imm_11 = (instr >> 20) & 0x01; /* 1 */
 	uint32_t imm_19_12 = (instr >> 12) & 0xFF; /* 1111 1111 */
-	return (imm_20 << 20)|(imm_19_12 << 19)|(imm_11 << 11)|(imm_10_1 << 10);
+	return (imm_20 << 20)|(imm_19_12 << 12)|(imm_11 << 11)|(imm_10_1 << 1);
 }
 
 static void verbose_printf(const char *format, ...) {
 	va_list ap;
 	va_start(ap, format);
 
-	vprintf(format, ap);
+	if (args.verbose)
+		vprintf(format, ap);
 }
 
 
@@ -330,15 +342,65 @@ static void exec_op_lui(uint32_t instr) {
 }
 
 static void exec_op_branch(uint32_t instr) {
-	verbose_printf("OP_BRANCH ");
+	uint32_t rs1 = get_rs1(instr);
+	uint32_t rs2 = get_rs2(instr);
+	uint32_t offset = sign_extend(get_b_imm(instr), 12);
+	uint32_t eff = M.pc + offset;
+
+	switch(get_funct3(instr)) {
+	case 0: /* 000 BEQ */
+		if (M.regs[rs1] == M.regs[rs2])
+			M.pc = eff - 4;
+		verbose_printf("beq x%d,x%d,0x%x ", rs1, rs2, eff);
+		break;
+	case 1: /* 001 BNE */
+		if (M.regs[rs1] != M.regs[rs2])
+			M.pc = eff - 4;
+		verbose_printf("bne x%d,x%d,0x%x ", rs1, rs2, eff);
+		break;
+	case 4: /* 100 BLT */
+		if ((int32_t)M.regs[rs1] < (int32_t)M.regs[rs2])
+			M.pc = eff - 4;
+		verbose_printf("blt x%d,x%d,0x%x ", rs1, rs2, eff);
+		break;
+	case 5: /* 101 BGE */
+		if ((int32_t)M.regs[rs1] >= (int32_t)M.regs[rs2])
+			M.pc = eff - 4;
+		verbose_printf("bge x%d,x%d,0x%x ", rs1, rs2, eff);
+		break;
+	case 6: /* 110 BLTU */
+		if (M.regs[rs1] < M.regs[rs2])
+			M.pc = eff - 4;
+		verbose_printf("bltu x%d,x%d,0x%x ", rs1, rs2, eff);
+		break;
+	case 7: /* 111 BGEU */
+		if (M.regs[rs1] >= M.regs[rs2])
+			M.pc = eff - 4;
+		verbose_printf("bgeu x%d,x%d,0x%x ", rs1, rs2, eff);
+		break;
+	default:
+		trap_invalid_instr();
+		break;
+	}
 }
 
 static void exec_op_jalr(uint32_t instr) {
-	verbose_printf("OP_JALR ");
+	uint32_t rd = get_rd(instr);
+	uint32_t rs1 = get_rs1(instr);
+	uint32_t offset = sign_extend(get_i_imm(instr), 11);
+	uint32_t eff = (M.regs[rs1] + offset) & ~0x1;
+	M.regs[rd] = M.pc + 4;
+	M.pc = eff - 4;
+	verbose_printf("jalr x%u,x%u,0x%x", rd, rs1, eff);
 }
 
 static void exec_op_jal(uint32_t instr) {
-	verbose_printf("OP_JAL ");
+	uint32_t rd = get_rd(instr);
+	uint32_t offset = sign_extend(get_j_imm(instr), 20);
+	uint32_t eff = M.pc + offset;
+	M.regs[rd] = M.pc + 4;
+	M.pc = eff - 4; /* take into account coming increment in this cycle */
+	verbose_printf("jal x%d,0x%x ", rd, eff);
 }
 
 static void exec_op_system(uint32_t instr) {
@@ -407,14 +469,50 @@ static void run_machine_cycle(void) {
 	M.pc += 4;
 }
 
+static void print_regs(void) {
+	for (int i = 0; i < 32; i += 4) {
+		printf("x%.2d=%.8x\tx%.2d=%.8x\tx%.2d=%.8x\tx%.2d=%.8x\n",
+				i, M.regs[i], i + 1, M.regs[i + 1],
+				i + 2, M.regs[i + 2], i + 3, M.regs[i + 3]);
+	}
+}
 
-int main(int argc, char *argv[]) {
-	if (argc < 2) {
-		fprintf(stderr, "Usage: %s binImage\n", argv[0]);
-		exit(EXIT_FAILURE);
+
+static void parse_args(int argc, char *argv[]) {
+	int opt;
+
+	while ((opt = getopt(argc, argv, "vsp")) != -1) {
+		switch(opt) {
+		case 'v':
+			args.verbose = true;
+			break;
+		case 's':
+			args.single_step = true;
+			break;
+		case 'p':
+			args.print_regs = true;
+			break;
+		default: /* '?' */
+			goto fail;
+		}
 	}
 
-	int fd = open(argv[1], O_RDONLY);
+	if (optind >= argc)
+		goto fail;
+	else
+		args.bin_file = argv[optind];
+
+	return;
+
+fail:
+	fprintf(stderr, "Usage: %s [-v] [-s] binImage\n", argv[0]);
+	exit(EXIT_FAILURE);
+}
+
+int main(int argc, char *argv[]) {
+	parse_args(argc, argv);
+
+	int fd = open(args.bin_file, O_RDONLY);
 	if (fd < 0) {
 		perror("open");
 		exit(EXIT_FAILURE);
@@ -444,6 +542,12 @@ int main(int argc, char *argv[]) {
 
 	for(;;) {
 		run_machine_cycle();
+		if (args.print_regs) {
+			print_regs();
+			printf("\n");
+		}
+		if (args.single_step)
+			getchar();
 	}
 
 	return 0;
