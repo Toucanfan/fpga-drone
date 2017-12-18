@@ -120,6 +120,76 @@ static void verbose_printf(const char *format, ...) {
 		vprintf(format, ap);
 }
 
+enum {
+	REG_ZERO = 0,
+	REG_RA   = 1,
+	REG_SP   = 2,
+	REG_GP   = 3,
+	REG_TP   = 4,
+	REG_T0   = 5,
+	REG_T1   = 6,
+	REG_T2   = 7,
+	REG_S0   = 8,
+	REG_S1   = 9,
+	REG_A0   = 10,
+	REG_A1   = 11,
+	REG_A2   = 12,
+	REG_A3   = 13,
+	REG_A4   = 14,
+	REG_A5   = 15,
+	REG_A6   = 16,
+	REG_A7   = 17,
+	REG_S2   = 18,
+	REG_S3   = 19,
+	REG_S4   = 20,
+	REG_S5   = 21,
+	REG_S6   = 22,
+	REG_S7   = 23,
+	REG_S8   = 24,
+	REG_S9   = 25,
+	REG_S10  = 26,
+	REG_S11  = 27,
+	REG_T3   = 28,
+	REG_T4   = 29,
+	REG_T5   = 30,
+	REG_T6   = 31,
+};
+
+static const char *const regname[] = {
+	[REG_ZERO] = "zero",
+	[REG_RA]   = "ra",
+	[REG_SP]   = "sp",
+	[REG_GP]   = "gp",
+	[REG_TP]   = "tp",
+	[REG_T0]   = "t0",
+	[REG_T1]   = "t1",
+	[REG_T2]   = "t2",
+	[REG_S0]   = "s0",
+	[REG_S1]   = "s1",
+	[REG_A0]   = "a0",
+	[REG_A1]   = "a1",
+	[REG_A2]   = "a2",
+	[REG_A3]   = "a3",
+	[REG_A4]   = "a4",
+	[REG_A5]   = "a5",
+	[REG_A6]   = "a6",
+	[REG_A7]   = "a7",
+	[REG_S2]   = "s2",
+	[REG_S3]   = "s3",
+	[REG_S4]   = "s4",
+	[REG_S5]   = "s5",
+	[REG_S6]   = "s6",
+	[REG_S7]   = "s7",
+	[REG_S8]   = "s8",
+	[REG_S9]   = "s9",
+	[REG_S10]  = "s10",
+	[REG_S11]  = "s11",
+	[REG_T3]   = "t3",
+	[REG_T4]   = "t4",
+	[REG_T5]   = "t5",
+	[REG_T6]   = "t6",
+};
+	
 
 static void trap_invalid_instr(void) {
 	verbose_printf("invalid ");
@@ -133,27 +203,27 @@ static void exec_op_load(uint32_t instr) {
 	switch(get_funct3(instr)) {
 	case 0: /* 000 LB */
 		M.regs[rd] = sign_extend((uint32_t)(*((uint8_t *)&M.mem[eff])), 7);
-		verbose_printf("lb x%d,%d(x%d) ", rd, (int32_t)offset, rs1);
+		verbose_printf("lb %s,%d(%s) ", regname[rd], (int32_t)offset, regname[rs1]);
 		break;
 	
 	case 1: /* 001 LH */
 		M.regs[rd] = sign_extend((uint32_t)(*((uint16_t *)&M.mem[eff])), 15);
-		verbose_printf("lh x%d,%d(x%d) ", rd, (int32_t)offset, rs1);
+		verbose_printf("lh %s,%d(%s) ", regname[rd], (int32_t)offset, regname[rs1]);
 		break;
 
 	case 2: /* 010 LW */
 		M.regs[rd] = *((uint32_t *)&M.mem[eff]);
-		verbose_printf("lw x%d,%d(x%d) ", rd, (int32_t)offset, rs1);
+		verbose_printf("lw %s,%d(%s) ", regname[rd], (int32_t)offset, regname[rs1]);
 		break;
 
 	case 4: /* 100 LBU */
 		M.regs[rd] = (uint32_t)(*((uint8_t *)&M.mem[eff]));
-		verbose_printf("lbu x%d,%d(x%d) ", rd, (int32_t)offset, rs1);
+		verbose_printf("lbu %s,%d(%s) ", regname[rd], (int32_t)offset, regname[rs1]);
 		break;
 
 	case 5: /* 101 LHU */
 		M.regs[rd] = (uint32_t)(*((uint16_t *)&M.mem[eff]));
-		verbose_printf("lhu x%d,%d(x%d) ", rd, (int32_t)offset, rs1);
+		verbose_printf("lhu %s,%d(%s) ", regname[rd], (int32_t)offset, regname[rs1]);
 		break;
 		
 	default:
@@ -175,13 +245,13 @@ static void exec_op_imm(uint32_t instr) {
 	case 0: /* 000 ADDI */
 		imm = sign_extend(imm, 11);
 		M.regs[rd] = M.regs[rs1] + imm;
-		verbose_printf("addi x%d,x%d,%d ", rd, rs1, imm);
+		verbose_printf("addi %s,%s,%d ", regname[rd], regname[rs1], imm);
 		break;
 	case 1: /* 001 */
 		switch(funct7) {
 		case 0x00: /* 000 0000 SLLI */
 			M.regs[rd] = M.regs[rs1] << shamt;
-			verbose_printf("slli x%d,x%d,%d ", rd, rs1, shamt);
+			verbose_printf("slli %s,%s,%d ", regname[rd], regname[rs1], shamt);
 			break;
 		default:
 			trap_invalid_instr();
@@ -194,7 +264,7 @@ static void exec_op_imm(uint32_t instr) {
 			M.regs[rd] = 1;
 		else
 			M.regs[rd] = 0;
-		verbose_printf("slti x%d,x%d,%d ", rd, rs1, imm);
+		verbose_printf("slti %s,%s,%d ", regname[rd], regname[rs1], imm);
 		break;
 	case 3: /* 011 SLTIU */
 		imm = sign_extend(imm, 11);
@@ -202,22 +272,22 @@ static void exec_op_imm(uint32_t instr) {
 			M.regs[rd] = 1;
 		else
 			M.regs[rd] = 0;
-		verbose_printf("sltiu x%d,x%d,%d ", rd, rs1, imm);
+		verbose_printf("sltiu %s,%s,%d ", regname[rd], regname[rs1], imm);
 		break;
 	case 4: /* 100 XORI */
 		imm = sign_extend(imm, 11);
 		M.regs[rd] = M.regs[rs1] ^ imm;
-		verbose_printf("xori x%d,x%d,%d ", rd, rs1, imm);
+		verbose_printf("xori %s,%s,%d ", regname[rd], regname[rs1], imm);
 		break;
 	case 5: /* 101 */
 		switch(funct7) {
 		case 0x00: /* 000 0000 SRLI */
 			M.regs[rd] = M.regs[rs1] >> shamt;
-			verbose_printf("srli x%d,x%d,%d ", rd, rs1, shamt);
+			verbose_printf("srli %s,%s,%d ", regname[rd], regname[rs1], shamt);
 			break;
 		case 0x20: /* 010 0000 SRAI */
 			M.regs[rd] = (uint32_t)(((int32_t)M.regs[rs1]) >> shamt);
-			verbose_printf("srai x%d,x%d,%d ", rd, rs1, shamt);
+			verbose_printf("srai %s,%s,%d ", regname[rd], regname[rs1], shamt);
 			break;
 		default:
 			trap_invalid_instr();
@@ -227,12 +297,12 @@ static void exec_op_imm(uint32_t instr) {
 	case 6: /* 110 ORI */
 		imm = sign_extend(imm, 11);
 		M.regs[rd] = M.regs[rs1] | imm;
-		verbose_printf("ori x%d,x%d,%d ", rd, rs1, imm);
+		verbose_printf("ori %s,%s,%d ", regname[rd], regname[rs1], imm);
 		break;
 	case 7: /* 111 ANDI */
 		imm = sign_extend(imm, 11);
 		M.regs[rd] = M.regs[rs1] & imm;
-		verbose_printf("andi x%d,x%d,%d ", rd, rs1, imm);
+		verbose_printf("andi %s,%s,%d ", regname[rd], regname[rs1], imm);
 		break;
 	default:
 		trap_invalid_instr();
@@ -245,7 +315,7 @@ static void exec_op_auipc(uint32_t instr) {
 	uint32_t rd = get_rd(instr);
 	uint32_t offset = get_u_imm(instr) << 12;
 	M.regs[rd] = M.pc + offset;
-	verbose_printf("auipc x%d,%u ", rd, offset);
+	verbose_printf("auipc %s,%u ", regname[rd], offset);
 }
 
 static void exec_op_store(uint32_t instr) {
@@ -257,15 +327,15 @@ static void exec_op_store(uint32_t instr) {
 	switch(get_funct3(instr)) {
 	case 0: /* 000 SB */
 		M.mem[eff] = (uint8_t)M.regs[rs2];
-		verbose_printf("sb x%d,%d(x%d) ", rs2, (int32_t)offset, rs1);
+		verbose_printf("sb %s,%d(%s) ", regname[rs2], (int32_t)offset, regname[rs1]);
 		break;
 	case 1: /* 001 SH */
 		*((uint16_t *)&M.mem[eff]) = (uint16_t)M.regs[rs2];
-		verbose_printf("sh x%d,%d(x%d) ", rs2, (int32_t)offset, rs1);
+		verbose_printf("sh %s,%d(%s) ", regname[rs2], (int32_t)offset, regname[rs1]);
 		break;
 	case 2: /* 010 SW */
 		*((uint32_t *)&M.mem[eff]) = M.regs[rs2];
-		verbose_printf("sw x%d,%d(x%d) ", rs2, (int32_t)offset, rs1);
+		verbose_printf("sw %s,%d(%s) ", regname[rs2], (int32_t)offset, regname[rs1]);
 		break;
 	default:
 		trap_invalid_instr();
@@ -283,50 +353,50 @@ static void exec_op(uint32_t instr) {
 	case 0: /* 000 */
 		if (funct7 & 0x20) { /* 010 0000 SUB */
 			M.regs[rd] = M.regs[rs1] - M.regs[rs2];
-			verbose_printf("sub x%d,x%d,x%d ", rd, rs1, rs2);
+			verbose_printf("sub %s,%s,%s ", regname[rd], regname[rs1], regname[rs2]);
 		} else { /* 000 0000 ADD */
 			M.regs[rd] = M.regs[rs1] + M.regs[rs2];
-			verbose_printf("add x%d,x%d,x%d ", rd, rs1, rs2);
+			verbose_printf("add %s,%s,%s ", regname[rd], regname[rs1], regname[rs2]);
 		}
 		break;
 	case 1: /* 001 SLL */
 		M.regs[rd] = M.regs[rs1] << (M.regs[rs2] & 0x1F); /* 1 1111 */
-		verbose_printf("sll x%d,x%d,x%d ", rd, rs1, rs2);
+		verbose_printf("sll %s,%s,%s ", regname[rd], regname[rs1], regname[rs2]);
 		break;
 	case 2: /* 010 SLT */
 		if ((int32_t)M.regs[rs1] < (int32_t)M.regs[rs2])
 			M.regs[rd] = 1;
 		else
 			M.regs[rd] = 0;
-		verbose_printf("slt x%d,x%d,x%d ", rd, rs1, rs2);
+		verbose_printf("slt %s,%s,%s ", regname[rd], regname[rs1], regname[rs2]);
 		break;
 	case 3: /* 011 SLTU */
 		if (M.regs[rs1] < M.regs[rs2])
 			M.regs[rd] = 1;
 		else
 			M.regs[rd] = 0;
-		verbose_printf("slu x%d,x%d,x%d ", rd, rs1, rs2);
+		verbose_printf("slu %s,%s,%s ", regname[rd], regname[rs1], regname[rs2]);
 		break;
 	case 4: /* 100 XOR */
 		M.regs[rd] = M.regs[rs1] ^ M.regs[rs2];
-		verbose_printf("xor x%d,x%d,x%d ", rd, rs1, rs2);
+		verbose_printf("xor %s,%s,%s ", regname[rd], regname[rs1], regname[rs2]);
 		break;
 	case 5: /* 101 */
 		if (funct7 & 0x20) { /* 010 0000 SRA */
 			M.regs[rd] = (int32_t)M.regs[rs1] >> (M.regs[rs2] & 0x1F);
-			verbose_printf("sra x%d,x%d,x%d ", rd, rs1, rs2);
+			verbose_printf("sra %s,%s,%s ", regname[rd], regname[rs1], regname[rs2]);
 		} else { /* 000 0000 SRL */
 			M.regs[rd] = M.regs[rs1] >> (M.regs[rs2] & 0x1F);
-			verbose_printf("srl x%d,x%d,x%d ", rd, rs1, rs2);
+			verbose_printf("srl %s,%s,%s ", regname[rd], regname[rs1], regname[rs2]);
 		}
 		break;
 	case 6: /* 110 OR */
 		M.regs[rd] = M.regs[rs1] | M.regs[rs2];
-		verbose_printf("or x%d,x%d,x%d ", rd, rs1, rs2);
+		verbose_printf("or %s,%s,%s ", regname[rd], regname[rs1], regname[rs2]);
 		break;
 	case 7: /* 111 AND */
 		M.regs[rd] = M.regs[rs1] & M.regs[rs2];
-		verbose_printf("and x%d,x%d,x%d ", rd, rs1, rs2);
+		verbose_printf("and %s,%s,%s ", regname[rd], regname[rs1], regname[rs2]);
 		break;
 	default:
 		trap_invalid_instr();
@@ -338,7 +408,7 @@ static void exec_op_lui(uint32_t instr) {
 	uint32_t rd = get_rd(instr);
 	uint32_t imm = get_u_imm(instr) << 12;
 	M.regs[rd] = imm;
-	verbose_printf("lui x%d,0x%x ", rd, imm >> 12);
+	verbose_printf("lui %s,0x%x ", regname[rd], imm >> 12);
 }
 
 static void exec_op_branch(uint32_t instr) {
@@ -351,32 +421,32 @@ static void exec_op_branch(uint32_t instr) {
 	case 0: /* 000 BEQ */
 		if (M.regs[rs1] == M.regs[rs2])
 			M.pc = eff - 4;
-		verbose_printf("beq x%d,x%d,0x%x ", rs1, rs2, eff);
+		verbose_printf("beq %s,%s,0x%x ", regname[rs1], regname[rs2], eff);
 		break;
 	case 1: /* 001 BNE */
 		if (M.regs[rs1] != M.regs[rs2])
 			M.pc = eff - 4;
-		verbose_printf("bne x%d,x%d,0x%x ", rs1, rs2, eff);
+		verbose_printf("bne %s,%s,0x%x ", regname[rs1], regname[rs2], eff);
 		break;
 	case 4: /* 100 BLT */
 		if ((int32_t)M.regs[rs1] < (int32_t)M.regs[rs2])
 			M.pc = eff - 4;
-		verbose_printf("blt x%d,x%d,0x%x ", rs1, rs2, eff);
+		verbose_printf("blt %s,%s,0x%x ", regname[rs1], regname[rs2], eff);
 		break;
 	case 5: /* 101 BGE */
 		if ((int32_t)M.regs[rs1] >= (int32_t)M.regs[rs2])
 			M.pc = eff - 4;
-		verbose_printf("bge x%d,x%d,0x%x ", rs1, rs2, eff);
+		verbose_printf("bge %s,%s,0x%x ", regname[rs1], regname[rs2], eff);
 		break;
 	case 6: /* 110 BLTU */
 		if (M.regs[rs1] < M.regs[rs2])
 			M.pc = eff - 4;
-		verbose_printf("bltu x%d,x%d,0x%x ", rs1, rs2, eff);
+		verbose_printf("bltu %s,%s,0x%x ", regname[rs1], regname[rs2], eff);
 		break;
 	case 7: /* 111 BGEU */
 		if (M.regs[rs1] >= M.regs[rs2])
 			M.pc = eff - 4;
-		verbose_printf("bgeu x%d,x%d,0x%x ", rs1, rs2, eff);
+		verbose_printf("bgeu %s,%s,0x%x ", regname[rs1], regname[rs2], eff);
 		break;
 	default:
 		trap_invalid_instr();
@@ -391,7 +461,7 @@ static void exec_op_jalr(uint32_t instr) {
 	uint32_t eff = (M.regs[rs1] + offset) & ~0x1;
 	M.regs[rd] = M.pc + 4;
 	M.pc = eff - 4;
-	verbose_printf("jalr x%u,x%u,0x%x", rd, rs1, eff);
+	verbose_printf("jalr x%u,x%u,0x%x", regname[rd], regname[rs1], eff);
 }
 
 static void exec_op_jal(uint32_t instr) {
@@ -400,7 +470,7 @@ static void exec_op_jal(uint32_t instr) {
 	uint32_t eff = M.pc + offset;
 	M.regs[rd] = M.pc + 4;
 	M.pc = eff - 4; /* take into account coming increment in this cycle */
-	verbose_printf("jal x%d,0x%x ", rd, eff);
+	verbose_printf("jal %s,0x%x ", regname[rd], eff);
 }
 
 static void exec_op_system(uint32_t instr) {
