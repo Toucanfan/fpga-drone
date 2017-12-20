@@ -461,7 +461,7 @@ static void exec_op_jalr(uint32_t instr) {
 	uint32_t eff = (M.regs[rs1] + offset) & ~0x1;
 	M.regs[rd] = M.pc + 4;
 	M.pc = eff - 4;
-	verbose_printf("jalr x%u,x%u,0x%x", regname[rd], regname[rs1], eff);
+	verbose_printf("jalr %s,%s,0x%x", regname[rd], regname[rs1], eff);
 }
 
 static void exec_op_jal(uint32_t instr) {
@@ -541,9 +541,9 @@ static void run_machine_cycle(void) {
 
 static void print_regs(void) {
 	for (int i = 0; i < 32; i += 4) {
-		printf("x%.2d=%.8x\tx%.2d=%.8x\tx%.2d=%.8x\tx%.2d=%.8x\n",
-				i, M.regs[i], i + 1, M.regs[i + 1],
-				i + 2, M.regs[i + 2], i + 3, M.regs[i + 3]);
+		printf("%s=%.8x\t%s=%.8x\t%s=%.8x\t%s=%.8x\n",
+				regname[i], M.regs[i], regname[i+1], M.regs[i + 1],
+				regname[i+2], M.regs[i + 2], regname[i+3], M.regs[i + 3]);
 	}
 }
 
