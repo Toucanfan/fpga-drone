@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,11 +12,17 @@
 #define CSR_NEWDAT (1 << 0)
 #define CSR_TXDONE (1 << 1)
 
-static struct uart_regs {
+struct uart_regs {
 	uint8_t data_r;
 	uint8_t data_w; /* data_w is shadow register */
 	uint8_t csr;
-} regs;
+};
+
+static struct uart_regs regs = {
+	.data_r = 0,
+	.data_w = 0,
+	.csr = CSR_TXDONE,
+};
 
 static int ptm = -1;
 
@@ -26,7 +33,7 @@ void uart_update_state(void) {
 			regs.data_r = buf[0];
 			regs.csr |= CSR_NEWDAT;
 		}
-		while(read(ptm, buf, sizeof buf) > 0); /* flush input buffer */
+		//while(read(ptm, buf, sizeof buf) > 0); /* flush input buffer */
 	}
 	if (!(regs.csr & CSR_TXDONE)) {
 		write(ptm, &regs.data_w, 1);
@@ -37,7 +44,7 @@ void uart_update_state(void) {
 uint8_t uart_get_register(uint32_t reg) {
 	switch (reg) {
 	case UART_DATA:
-		regs.csr &= ~CSR_NEWDAT;
+		regs.csr &= (~CSR_NEWDAT);
 		return regs.data_r;
 		break;
 	case UART_CSR:
@@ -54,7 +61,7 @@ void uart_set_register(uint32_t reg, uint8_t value) {
 	switch (reg) {
 	case UART_DATA:
 		regs.data_w = value;
-		regs.csr &= ~CSR_TXDONE;
+		regs.csr &= (~CSR_TXDONE);
 		break;
 	case UART_CSR:
 		/* do nothing for now */
@@ -90,6 +97,17 @@ void uart_init(void) {
 	cfmakeraw(&t);
 	if (tcsetattr(ptm, TCSANOW, &t) < 0) {
 		perror("tcsetattr");
+		exit(EXIT_FAILURE);
+	}
+
+	int flags = fcntl(ptm, F_GETFL);
+	if (flags < 0) {
+		perror("fcntl");
+		exit(EXIT_FAILURE);
+	}
+	flags |= O_NONBLOCK;
+	if (fcntl(ptm, F_SETFL, flags) < 0) {
+		perror("fcntl");
 		exit(EXIT_FAILURE);
 	}
 
