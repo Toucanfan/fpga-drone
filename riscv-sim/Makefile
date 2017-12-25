@@ -8,12 +8,12 @@ RISCV_OBJCOPY=$(RISCV_PATH)/riscv64-unknown-elf-objcopy
 ### END CONFIGURATION ###
 
 PROGRAMS=riscv-sim
-OBJECTS=main.o uart.o
-HEADERS=uart.h
+OBJECTS=main.o uart.o mem.o
+HEADERS=uart.h mem.h
 LIBS=
 CFLAGS=-std=c99
 RISCV_PROGRAMS=test/riscv-test.elf test/riscv-test.bin
-RISCV_OBJECTS=test/head.o test/copy_data.o test/test.o
+RISCV_OBJECTS=test/head.o test/copy_data.o test/test.o test/uart.o
 RISCV_CFLAGS=-march=rv32i -mabi=ilp32 -ffreestanding -nostdlib
 RISCV_AFLAGS=-march=rv32i -mabi=ilp32
 

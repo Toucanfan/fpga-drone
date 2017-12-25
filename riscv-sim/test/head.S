@@ -11,7 +11,7 @@ irq:	j	irq
 
 start:
 	li sp, 0x20000
-#call memtest
+	/*call memtest*/
 	call copy_data /* copy .data to RAM */
 	call main
 
