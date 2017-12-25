@@ -12,6 +12,9 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include "mem.h"
+#include "uart.h"
+
 #define MEMBIT 24
 
 #define OP_LOAD    0x00 /* 00000 */
@@ -29,12 +32,12 @@ static struct arguments {
 	bool verbose;
 	bool single_step;
 	bool print_regs;
+	bool enable_uart;
 	char *bin_file;
 } args;
 
 struct machine {
 	uint32_t pc;
-	char *mem;
 	uint32_t regs[32];
 } M;
 
@@ -67,7 +70,7 @@ static uint32_t get_rd(const uint32_t instr) {
 }
 
 static uint32_t get_funct3(const uint32_t instr) {
-	return (instr >> 12) & 0x03; /* 11 */
+	return (instr >> 12) & 0x07; /* 111 */
 }
 
 static uint32_t get_funct7(const uint32_t instr) {
@@ -192,37 +195,98 @@ static const char *const regname[] = {
 	
 
 static void trap_invalid_instr(void) {
-	verbose_printf("invalid ");
+	verbose_printf("illegal instruction ");
 }
+
+static void trap_invalid_memory(void) {
+	verbose_printf("illegal memory access ");
+}
+
+static void trap_illegal_alignment(void) {
+	verbose_printf("unaligned memory access ");
+}
+
+union memdata {
+	uint32_t word;
+	uint16_t hwords[2];
+	uint8_t bytes[4];
+};
 
 static void exec_op_load(uint32_t instr) {
 	uint32_t rd = get_rd(instr);
 	uint32_t rs1 = get_rs1(instr);
 	uint32_t offset = sign_extend(get_i_imm(instr), 11);
 	uint32_t eff = M.regs[rs1] + offset;
+
+	union memdata m = {0};
+	int r = -1;
+
 	switch(get_funct3(instr)) {
 	case 0: /* 000 LB */
-		M.regs[rd] = sign_extend((uint32_t)(*((uint8_t *)&M.mem[eff])), 7);
+		r = mem_load_byte(eff, &m.bytes[0]);
+		if (r < 0) {
+			trap_invalid_memory();
+			return;
+		}
+		M.regs[rd] = sign_extend((uint32_t)m.bytes[0], 7);
 		verbose_printf("lb %s,%d(%s) ", regname[rd], (int32_t)offset, regname[rs1]);
 		break;
 	
 	case 1: /* 001 LH */
-		M.regs[rd] = sign_extend((uint32_t)(*((uint16_t *)&M.mem[eff])), 15);
+		if (eff % 2) {
+			trap_illegal_alignment();
+			return;
+		}
+		for (int i = 0; i < 2; ++i) {
+			r = mem_load_byte(eff + i, &m.bytes[i]);
+			if (r < 0) {
+				trap_invalid_memory();
+				return;
+			}
+		}
+		M.regs[rd] = sign_extend((uint32_t)m.hwords[0], 15);
 		verbose_printf("lh %s,%d(%s) ", regname[rd], (int32_t)offset, regname[rs1]);
 		break;
 
 	case 2: /* 010 LW */
-		M.regs[rd] = *((uint32_t *)&M.mem[eff]);
+		if (eff % 4) {
+			trap_illegal_alignment();
+			return;
+		}
+		for (int i = 0; i < 4; ++i) {
+			r = mem_load_byte(eff + i, &m.bytes[i]);
+			if (r < 0) {
+				trap_invalid_memory();
+				return;
+			}
+		}
+		M.regs[rd] = m.word;
 		verbose_printf("lw %s,%d(%s) ", regname[rd], (int32_t)offset, regname[rs1]);
 		break;
 
 	case 4: /* 100 LBU */
-		M.regs[rd] = (uint32_t)(*((uint8_t *)&M.mem[eff]));
+		r = mem_load_byte(eff, &m.bytes[0]);
+		if (r < 0) {
+			trap_invalid_memory();
+			return;
+		}
+		M.regs[rd] = (uint32_t)m.bytes[0];
 		verbose_printf("lbu %s,%d(%s) ", regname[rd], (int32_t)offset, regname[rs1]);
 		break;
 
 	case 5: /* 101 LHU */
-		M.regs[rd] = (uint32_t)(*((uint16_t *)&M.mem[eff]));
+		if (eff % 2) {
+			trap_illegal_alignment();
+			return;
+		}
+		for (int i = 0; i < 2; ++i) {
+			r = mem_load_byte(eff + i, &m.bytes[i]);
+			if (r < 0) {
+				trap_invalid_memory();
+				return;
+			}
+		}
+		M.regs[rd] = (uint32_t)m.hwords[0];
 		verbose_printf("lhu %s,%d(%s) ", regname[rd], (int32_t)offset, regname[rs1]);
 		break;
 		
@@ -323,24 +387,46 @@ static void exec_op_store(uint32_t instr) {
 	uint32_t rs2 = get_rs2(instr);
 	uint32_t offset = sign_extend(get_s_imm(instr), 11);
 	uint32_t eff = M.regs[rs1] + offset;
+	int n_bytes = 0;
+	union memdata m = {0};
+	m.word = M.regs[rs2];
+	char str[128];
 
 	switch(get_funct3(instr)) {
 	case 0: /* 000 SB */
-		M.mem[eff] = (uint8_t)M.regs[rs2];
-		verbose_printf("sb %s,%d(%s) ", regname[rs2], (int32_t)offset, regname[rs1]);
+		n_bytes = 1;
+		snprintf(str, sizeof str, "sb %s,%d(%s) ", regname[rs2], (int32_t)offset, regname[rs1]);
 		break;
 	case 1: /* 001 SH */
-		*((uint16_t *)&M.mem[eff]) = (uint16_t)M.regs[rs2];
-		verbose_printf("sh %s,%d(%s) ", regname[rs2], (int32_t)offset, regname[rs1]);
+		if (eff % 2) {
+			trap_illegal_alignment();
+			return;
+		}
+		n_bytes = 2;
+		snprintf(str, sizeof str, "sh %s,%d(%s) ", regname[rs2], (int32_t)offset, regname[rs1]);
 		break;
 	case 2: /* 010 SW */
-		*((uint32_t *)&M.mem[eff]) = M.regs[rs2];
-		verbose_printf("sw %s,%d(%s) ", regname[rs2], (int32_t)offset, regname[rs1]);
+		if (eff % 4) {
+			trap_illegal_alignment();
+			return;
+		}
+		n_bytes = 4;
+		snprintf(str, sizeof str, "sw %s,%d(%s) ", regname[rs2], (int32_t)offset, regname[rs1]);
 		break;
 	default:
 		trap_invalid_instr();
-		break;
+		return;
 	}
+
+	for (int i = 0; i < n_bytes; ++i) {
+		int r = mem_store_byte(eff + i, m.bytes[i]);
+		if (r < 0) {
+			trap_invalid_memory();
+			return;
+		}
+	}
+
+	verbose_printf("%s", str);
 }
 
 static void exec_op(uint32_t instr) {
@@ -479,7 +565,16 @@ static void exec_op_system(uint32_t instr) {
 
 static void run_machine_cycle(void) {
 	/* Fetch */
-	uint32_t instr = *((uint32_t *)&M.mem[M.pc]);
+	union memdata m = {0};
+	for (int i = 0; i < 4; ++i) {
+		int r = mem_load_byte(M.pc + i, &m.bytes[i]);
+		if (r < 0) {
+			trap_invalid_memory();
+			return;
+		}
+	}
+	uint32_t instr = m.word;
+
 	verbose_printf("%.8x: %.8x - ", M.pc, instr);
 	
 	/* Decode */
@@ -551,7 +646,7 @@ static void print_regs(void) {
 static void parse_args(int argc, char *argv[]) {
 	int opt;
 
-	while ((opt = getopt(argc, argv, "vsp")) != -1) {
+	while ((opt = getopt(argc, argv, "vspu")) != -1) {
 		switch(opt) {
 		case 'v':
 			args.verbose = true;
@@ -561,6 +656,9 @@ static void parse_args(int argc, char *argv[]) {
 			break;
 		case 'p':
 			args.print_regs = true;
+			break;
+		case 'u':
+			args.enable_uart = true;
 			break;
 		default: /* '?' */
 			goto fail;
@@ -575,47 +673,33 @@ static void parse_args(int argc, char *argv[]) {
 	return;
 
 fail:
-	fprintf(stderr, "Usage: %s [-v] [-s] binImage\n", argv[0]);
+	fprintf(stderr, "Usage: %s [-vspu] binImage\n", argv[0]);
 	exit(EXIT_FAILURE);
 }
 
 int main(int argc, char *argv[]) {
 	parse_args(argc, argv);
+	mem_init();
+	uart_init();
+	mem_rom_load_flatbin(0, args.bin_file);
 
-	int fd = open(args.bin_file, O_RDONLY);
-	if (fd < 0) {
-		perror("open");
-		exit(EXIT_FAILURE);
-	}
-
-	struct stat st;
-	if (fstat(fd, &st) < 0) {
-		perror("fstat");
-		exit(EXIT_FAILURE);
-	}
-	int programSize = st.st_size;
-
-	char *program = mmap(NULL, programSize, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (program == MAP_FAILED) {
-		perror("mmap");
-		exit(EXIT_FAILURE);
-	}
-
+	/* initialize machine state */
 	memset(&M, 0, sizeof M);
 	M.pc = 0;
-	M.mem = malloc(1 << MEMBIT);
-	memset(M.mem, 0, (1 << MEMBIT));
 
-	for (int i = 0; i < programSize; ++i) {
-		M.mem[i] = program[i];
-	}
+	printf("Loaded into memory: %s\n", args.bin_file);
+	printf("Press any key to begin execution...\n");
+	getchar();
 
 	for(;;) {
+		if (args.enable_uart)
+			uart_update_state();
 		run_machine_cycle();
 		if (args.print_regs) {
 			print_regs();
 			printf("\n");
 		}
+		usleep(10000);
 		if (args.single_step)
 			getchar();
 	}
