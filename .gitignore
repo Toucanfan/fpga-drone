@@ -1,1 +1,6 @@
 *.o
+*.bin
+*.elf
+*.swp
+
+/riscv-sim/riscv-sim
