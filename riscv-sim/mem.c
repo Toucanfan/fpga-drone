@@ -156,7 +156,7 @@ void mem_rom_load_flatbin(uint32_t offset, char *filepath) {
 		exit(EXIT_FAILURE);
 	}
 
-	for (int i = offset; i < (programSize+offset); ++i) {
-		internal_rom[i] = program[i];
+	for (int i = 0; i < programSize; ++i) {
+		internal_rom[offset + i] = program[i];
 	}
 }

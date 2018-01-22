@@ -11,9 +11,9 @@ PROGRAMS=riscv-sim
 OBJECTS=main.o uart.o mem.o
 HEADERS=uart.h mem.h
 LIBS=
-CFLAGS=-std=c99
+CFLAGS=-std=c99 -Wall
 RISCV_PROGRAMS=test/riscv-test.elf test/riscv-test.bin
-RISCV_OBJECTS=test/head.o test/copy_data.o test/test.o test/uart.o
+RISCV_OBJECTS=test/head.o test/copy_data.o test/main.o test/uart.o
 RISCV_CFLAGS=-march=rv32i -mabi=ilp32 -ffreestanding -nostdlib
 RISCV_AFLAGS=-march=rv32i -mabi=ilp32
 
