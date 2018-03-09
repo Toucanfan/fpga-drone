@@ -687,7 +687,7 @@ int main(int argc, char *argv[]) {
 	memset(&M, 0, sizeof M);
 	M.pc = 0;
 
-	printf("Loaded into memory: %s\n", args.bin_file);
+	printf("Loaded file into memory: %s\n", args.bin_file);
 	printf("Press any key to begin execution...\n");
 	getchar();
 
@@ -699,7 +699,7 @@ int main(int argc, char *argv[]) {
 			print_regs();
 			printf("\n");
 		}
-		usleep(10000);
+		usleep(10);
 		if (args.single_step)
 			getchar();
 	}

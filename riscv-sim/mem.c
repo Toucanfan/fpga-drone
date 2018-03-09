@@ -11,8 +11,8 @@
 #include "mem.h"
 #include "uart.h"
 
-#define ROM_SIZE (1 << 5)
-#define RAM_SIZE (1 << 5)
+#define ROM_SIZE (1 << 16)
+#define RAM_SIZE (1 << 16)
 
 
 typedef int storefunc_t(uint32_t addr, uint8_t value);
@@ -145,7 +145,7 @@ void mem_rom_load_flatbin(uint32_t offset, char *filepath) {
 		exit(EXIT_FAILURE);
 	}
 	int programSize = st.st_size;
-	if ((programSize + offset) < ROM_SIZE) {
+	if ((programSize + offset) > ROM_SIZE) {
 		fprintf(stderr, "mem_rom_load_flatbin: %s too large\n", filepath);
 		exit(EXIT_FAILURE);
 	}
